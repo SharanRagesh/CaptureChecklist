@@ -130,7 +130,7 @@
   /* Rig dial tabs */
   .dial {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 6px;
     margin-bottom: 6px;
   }
@@ -590,7 +590,7 @@
 <header>
   <div class="title-block">
     <h1>Field Checklist</h1>
-    <p>3DGS &amp; static plate capture — pre-flight through wrap</p>
+    <p>Gaussian Splatting &amp; static plate capture checklists</p>
   </div>
   <div class="header-right">
     <div class="total-count mono" id="total-count">0/0</div>
@@ -709,53 +709,6 @@ const DATA = [
         'Cleaning kit',
         'Shoot Tracking Table / Plate ID list on hand',
         'Stand-in briefed on role for reference clip',
-      ]},
-    ]
-  },
-  {
-    id: 'general',
-    label: 'General',
-    groups: [
-      { title: 'Gear', items: [
-        'Camera firmware updated',
-        'Laptop + card reader for on-site backup',
-        'Battery chargers + charging cables',
-        'Extra cables (data transfer, power bank)',
-        'Gray/white balance reference',
-        'Card labels / naming convention set',
-        'Reference scale bar or ruler',
-        'Bubble level for rig leveling',
-      ]},
-      { title: 'Scene conditions', items: [
-        'Lighting is flat/diffused — no harsh or shifting shadows',
-        'No moving elements in frame (people, foliage, reflections)',
-        'Shot coverage/overlap plan confirmed before starting',
-        'Camera/rig positions marked with tape if returning to same spot',
-        'White balance consistent across all cameras',
-        'ND filters ready for bright/outdoor light',
-      ]},
-      { title: 'Logistics', items: [
-        'Location access/permissions confirmed',
-        'Power source confirmed on-site (outlets, generator, extension cables)',
-        'Client/site contact person and access instructions noted',
-        'Site permissions/release forms signed if needed',
-        'Walkie-talkies or comms plan for larger crews',
-      ]},
-    ]
-  },
-  {
-    id: 'wrap',
-    label: 'Wrap-up',
-    groups: [
-      { title: 'On location', items: [
-        'Check all cards for data integrity',
-        'Run a quick test reconstruction/preview before full teardown',
-        'Dismantle rig and pack into bags',
-      ]},
-      { title: 'Back at office', items: [
-        'Backup all cards',
-        'Rename/organize folders by shoot date and location',
-        'Format all cards for next capture',
       ]},
     ]
   },
