@@ -614,7 +614,7 @@
 </footer>
 
 <div class="confirm-box" id="confirm-box">
-  <span>Clear every checked item and all Static Plates / Single Camera - GS entries? This can't be undone.</span>
+  <span>Clear every checked item and all Static Plates / Single Camera - GS / Multi-Cam GS entries? This can't be undone.</span>
   <button id="confirm-cancel">Cancel</button>
   <button class="yes" id="confirm-yes">Clear all</button>
 </div>
@@ -655,9 +655,9 @@ const DATA = [
   },
   {
     id: 'multi',
-    label: 'Multicam',
+    label: 'Multi-Cam GS',
     groups: [
-      { title: 'Pre-flight', items: [
+      { title: 'Pre-flight — once per shoot', items: [
         '7 cameras',
         '18mm lens x7',
         '64GB cards x9',
@@ -672,19 +672,6 @@ const DATA = [
         'Screws',
         'Other hardware',
         'Pack everything in bag',
-      ]},
-      { title: 'Scan day', items: [
-        'Clean all cameras and lenses',
-        'Format all cards',
-        'Match ISO to master camera',
-        'Match shutter speed to master camera',
-        'Match aperture to master camera',
-        'Match focal length to master camera',
-        'Match AF focus to master camera',
-        'RAW shooting enabled',
-        'Connect all triggers',
-        'Trigger all cameras — check focus and exposure across the rig',
-        'Confirm timecode/sync holds through a full capture',
       ]},
     ]
   },
@@ -2381,6 +2368,378 @@ function scGenerateFullReport() {
 
 /* ============ end Single Camera - GS module ============ */
 
+/* ============ Multi-Cam GS data-entry module ============ */
+
+const MC_STORAGE_KEY = 'field-checklist-multi-v1';
+const MC_CAMERAS = ['RED Komodo 6K', 'RED Komodo-X', 'Blackmagic URSA Cine 12K LF', 'Sony A7R IV', 'Sony A7S III', 'Sony FX3'];
+const MC_CHECKLIST_ITEMS = [
+  ['sensorMatchChecked', 'Clean all cameras and lenses'],
+  ['formatCardsChecked', 'Format all cards'],
+  ['isoChecked', 'Match ISO to master camera'],
+  ['shutterChecked', 'Match shutter speed to master camera'],
+  ['apertureChecked', 'Match aperture to master camera'],
+  ['focalLengthChecked', 'Match focal length to master camera'],
+  ['afFocusChecked', 'Match AF focus to master camera'],
+  ['rawChecked', 'RAW shooting enabled'],
+  ['triggersConnectedChecked', 'Connect all triggers'],
+  ['triggerCheckChecked', 'Trigger all cameras — check focus and exposure across the rig'],
+  ['timecodeSyncChecked', 'Confirm timecode/sync holds through a full capture'],
+];
+
+function mcBlankVariant() {
+  const v = {
+    location: '', variantName: '',
+    cameraPreset: '', cameraCustom: '',
+    lens1Preset: '', lens1Custom: '',
+    lens2Preset: '', lens2Custom: '',
+    cards: [],
+  };
+  MC_CHECKLIST_ITEMS.forEach(([key]) => { v[key] = false; });
+  return v;
+}
+
+let mcState = {
+  projectName: '',
+  locations: [],
+  draft: mcBlankVariant(),
+  cardCounter: 1,
+};
+try {
+  const mcRaw = localStorage.getItem(MC_STORAGE_KEY);
+  if (mcRaw) {
+    const mcParsed = JSON.parse(mcRaw);
+    if (typeof mcParsed.projectName === 'string') mcState.projectName = mcParsed.projectName;
+    if (Array.isArray(mcParsed.locations)) mcState.locations = mcParsed.locations;
+    if (mcParsed.draft) mcState.draft = Object.assign(mcBlankVariant(), mcParsed.draft);
+    if (typeof mcParsed.cardCounter === 'number') mcState.cardCounter = mcParsed.cardCounter;
+  }
+} catch (e) {}
+
+function mcSave() {
+  try { localStorage.setItem(MC_STORAGE_KEY, JSON.stringify(mcState)); } catch (e) {}
+}
+
+function mcVariantId(v) {
+  const loc = (v.location || 'Location').trim().replace(/\s+/g, '');
+  const name = (v.variantName || 'Variant').trim().replace(/\s+/g, '');
+  return loc + '_' + name;
+}
+
+function renderMultiCamSection(content) {
+  const d = mcState.draft;
+  const wrap = document.createElement('div');
+  const checklistHTML = MC_CHECKLIST_ITEMS.map(([key, label], i) =>
+    `<label class="sp-check"><input type="checkbox" id="mc-c-${i}" ${d[key] ? 'checked' : ''}> ${spEsc(label)}</label>`
+  ).join('');
+  wrap.innerHTML = `
+    <div class="sp-panel">
+      <div class="sp-panel-head"><h2>Project</h2><span class="sp-hint">once per shoot</span></div>
+      <div class="sp-grid">
+        <div class="sp-field full">
+          <label>Project Name</label>
+          <input type="text" id="mc-project" value="${spEsc(mcState.projectName)}" placeholder="e.g. Museum GS Rig Scan">
+        </div>
+      </div>
+    </div>
+
+    <div class="sp-panel">
+      <div class="sp-panel-head"><h2>Capture</h2><span class="sp-hint">fill only what changed</span></div>
+
+      <div class="sp-subhead">Shot ID</div>
+      <div class="sp-grid">
+        <div class="sp-field">
+          <label>Location</label>
+          <input type="text" id="mc-location" value="${spEsc(d.location)}" placeholder="e.g. Main Hall">
+        </div>
+        <div class="sp-field">
+          <label>Variant Name</label>
+          <input type="text" id="mc-variantname" value="${spEsc(d.variantName)}" placeholder="e.g. Variant01">
+        </div>
+        <div class="sp-field full">
+          <label>Variant ID (Location_VariantName)</label>
+          <div class="sp-plate-id" id="mc-variant-id">${spEsc(mcVariantId(d))}</div>
+        </div>
+      </div>
+
+      <div class="sp-subhead">Checklist</div>
+      <div class="sp-check-grid">${checklistHTML}</div>
+
+      <div class="sp-subhead">Camera &amp; Lenses</div>
+      <div class="sp-grid">
+        <div class="sp-field">
+          <label>Camera</label>
+          <select id="mc-camera">${spOptionsHTML(MC_CAMERAS, d.cameraPreset)}</select>
+        </div>
+        <div class="sp-field" id="mc-camera-custom-wrap" style="${d.cameraPreset === 'custom' ? '' : 'display:none'}">
+          <label>Custom Camera</label>
+          <input type="text" id="mc-camera-custom" value="${spEsc(d.cameraCustom)}">
+        </div>
+        <div class="sp-field">
+          <label>Lens 1 (mm)</label>
+          <select id="mc-lens1">${spOptionsHTML(SP_FOCAL_LENGTHS, d.lens1Preset, { suffix: 'mm' })}</select>
+        </div>
+        <div class="sp-field" id="mc-lens1-custom-wrap" style="${d.lens1Preset === 'custom' ? '' : 'display:none'}">
+          <label>Custom Lens 1</label>
+          <input type="text" id="mc-lens1-custom" value="${spEsc(d.lens1Custom)}" placeholder="mm">
+        </div>
+        <div class="sp-field">
+          <label>Lens 2 (mm)</label>
+          <select id="mc-lens2">${spOptionsHTML(SP_FOCAL_LENGTHS, d.lens2Preset, { suffix: 'mm' })}</select>
+        </div>
+        <div class="sp-field" id="mc-lens2-custom-wrap" style="${d.lens2Preset === 'custom' ? '' : 'display:none'}">
+          <label>Custom Lens 2</label>
+          <input type="text" id="mc-lens2-custom" value="${spEsc(d.lens2Custom)}" placeholder="mm">
+        </div>
+      </div>
+
+      <div class="sp-subhead">Cards Used (this variant)</div>
+      <div class="sc-counter-row">
+        <button class="sp-btn" id="mc-card-minus" type="button">− Card</button>
+        <div class="sc-counter-display">
+          <div class="sc-counter-num" id="mc-next-card-label">Next: Card ${String(mcState.cardCounter).padStart(2, '0')}</div>
+        </div>
+        <button class="sp-btn sp-btn-accent" id="mc-card-plus" type="button">+ Card</button>
+      </div>
+      <div class="sp-log" id="mc-card-log"></div>
+
+      <div class="sp-btn-row">
+        <button class="sp-btn sp-btn-accent" id="mc-btn-variant">+ Variant</button>
+        <button class="sp-btn sp-btn-accent" id="mc-btn-location">+ Location</button>
+        <button class="sp-btn sp-btn-ok" id="mc-btn-report">Generate Report</button>
+      </div>
+    </div>
+
+    <div class="sp-panel">
+      <div class="sp-panel-head"><h2>Captured So Far</h2></div>
+      <div class="sp-log" id="mc-log"></div>
+    </div>
+  `;
+  content.appendChild(wrap);
+  mcRenderLog();
+  mcRenderCardLog();
+  mcBindHandlers();
+}
+
+function mcRenderLog() {
+  const log = document.getElementById('mc-log');
+  if (!log) return;
+  if (!mcState.locations.length) {
+    log.innerHTML = '<div class="sp-log-empty">Nothing saved yet — fill in the form above, then press + Variant or + Location.</div>';
+    return;
+  }
+  log.innerHTML = mcState.locations.map(loc =>
+    `<div class="sp-log-loc"><span class="sp-loc-name">${spEsc(loc.name || '(unnamed)')}</span><span class="mono">${loc.variants.length} variant${loc.variants.length === 1 ? '' : 's'}</span></div>`
+  ).join('');
+}
+
+function mcRenderCardLog() {
+  const log = document.getElementById('mc-card-log');
+  if (!log) return;
+  const cards = mcState.draft.cards || [];
+  if (!cards.length) {
+    log.innerHTML = '<div class="sp-log-empty">No cards logged for this variant yet.</div>';
+    return;
+  }
+  log.innerHTML = cards.map(c => `<div class="sp-log-loc"><span class="sp-loc-name">${spEsc(spFormatCardLine(c))}</span></div>`).join('');
+}
+
+function mcBindField(id, evt, setter) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener(evt, () => { setter(el.value); mcSave(); });
+}
+function mcBindCheckbox(id, setter) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('change', () => { setter(el.checked); mcSave(); });
+}
+function mcBindToggle(id, wrapId, setter) {
+  const el = document.getElementById(id);
+  const wrapEl = document.getElementById(wrapId);
+  if (!el) return;
+  el.addEventListener('change', () => {
+    setter(el.value);
+    mcSave();
+    if (wrapEl) wrapEl.style.display = el.value === 'custom' ? '' : 'none';
+  });
+}
+function mcUpdateVariantId() {
+  const el = document.getElementById('mc-variant-id');
+  if (el) el.textContent = mcVariantId(mcState.draft);
+}
+function mcUpdateNextCardLabel() {
+  const el = document.getElementById('mc-next-card-label');
+  if (el) el.textContent = 'Next: Card ' + String(mcState.cardCounter).padStart(2, '0');
+}
+
+function mcAddCard() {
+  const d = mcState.draft;
+  if (!d.cards) d.cards = [];
+  const entry = { number: mcState.cardCounter, iso: new Date().toISOString() };
+  d.cards.push(entry);
+  mcState.cardCounter = mcState.cardCounter + 1;
+  mcSave();
+  mcRenderCardLog();
+  mcUpdateNextCardLabel();
+  spToast('Logged ' + spFormatCardLine(entry));
+}
+
+function mcRemoveLastCard() {
+  const d = mcState.draft;
+  if (!d.cards || !d.cards.length) return;
+  const removed = d.cards.pop();
+  if (removed && mcState.cardCounter > removed.number) {
+    mcState.cardCounter = removed.number;
+  }
+  mcSave();
+  mcRenderCardLog();
+  mcUpdateNextCardLabel();
+}
+
+function mcBindHandlers() {
+  const d = mcState.draft;
+  mcBindField('mc-project', 'input', v => mcState.projectName = v);
+  mcBindField('mc-location', 'input', v => { d.location = v; mcUpdateVariantId(); });
+  mcBindField('mc-variantname', 'input', v => { d.variantName = v; mcUpdateVariantId(); });
+
+  MC_CHECKLIST_ITEMS.forEach(([key], i) => {
+    mcBindCheckbox('mc-c-' + i, v => d[key] = v);
+  });
+
+  mcBindToggle('mc-camera', 'mc-camera-custom-wrap', v => d.cameraPreset = v);
+  mcBindField('mc-camera-custom', 'input', v => d.cameraCustom = v);
+  mcBindToggle('mc-lens1', 'mc-lens1-custom-wrap', v => d.lens1Preset = v);
+  mcBindField('mc-lens1-custom', 'input', v => d.lens1Custom = v);
+  mcBindToggle('mc-lens2', 'mc-lens2-custom-wrap', v => d.lens2Preset = v);
+  mcBindField('mc-lens2-custom', 'input', v => d.lens2Custom = v);
+
+  const minusBtn = document.getElementById('mc-card-minus');
+  const plusBtn = document.getElementById('mc-card-plus');
+  if (minusBtn) minusBtn.addEventListener('click', mcRemoveLastCard);
+  if (plusBtn) plusBtn.addEventListener('click', mcAddCard);
+
+  const btnVariant = document.getElementById('mc-btn-variant');
+  const btnLoc = document.getElementById('mc-btn-location');
+  const btnReport = document.getElementById('mc-btn-report');
+  if (btnVariant) btnVariant.addEventListener('click', () => mcCommit('variant'));
+  if (btnLoc) btnLoc.addEventListener('click', () => mcCommit('location'));
+  if (btnReport) btnReport.addEventListener('click', () => mcGenerateFullReport());
+}
+
+function mcRefreshForm() {
+  renderContent();
+  updateMeters();
+}
+
+function mcCommit(kind) {
+  const d = mcState.draft;
+  if (!d.location.trim() && !d.variantName.trim()) {
+    spToast('Add a location and variant name before saving.');
+    return;
+  }
+  const savedVariant = Object.assign({}, d, {
+    variantId: mcVariantId(d),
+    cards: (d.cards || []).slice(),
+  });
+
+  let loc = mcState.locations.find(l => l.name === d.location.trim());
+  if (!loc) {
+    loc = { name: d.location.trim(), variants: [] };
+    mcState.locations.push(loc);
+  }
+  loc.variants.push(savedVariant);
+  mcSave();
+
+  const fnameProject = spSanitizeName(mcState.projectName);
+  if (kind === 'variant') {
+    const fname = spFormatDateCompact(null) + '_' + savedVariant.variantId + '_' + fnameProject;
+    mcGenerateReportFor([{ name: loc.name, variants: [savedVariant] }], 'Variant Report — ' + savedVariant.variantId, fname);
+  } else {
+    const fname = spFormatDateCompact(null) + '_' + fnameProject + '_' + spSanitizeName(loc.name) + '_CaptureReport';
+    mcGenerateReportFor([{ name: loc.name, variants: loc.variants }], 'Location Report — ' + loc.name, fname);
+  }
+
+  const next = Object.assign({}, d);
+  next.variantName = '';
+  MC_CHECKLIST_ITEMS.forEach(([key]) => { next[key] = false; });
+  next.cards = [];
+  if (kind === 'location') next.location = '';
+  mcState.draft = next;
+  mcSave();
+  mcRefreshForm();
+  spToast(kind === 'variant' ? 'Variant saved — report ready.' : 'Location saved — report ready.');
+}
+
+function mcVariantFieldPairs(variant) {
+  const camera = spResolve(variant.cameraPreset, variant.cameraCustom);
+  const lens1 = spResolve(variant.lens1Preset, variant.lens1Custom);
+  const lens2 = spResolve(variant.lens2Preset, variant.lens2Custom);
+  const pairs = [
+    ['Camera', camera],
+    ['Lens 1', lens1 ? lens1 + 'mm' : ''],
+    ['Lens 2', lens2 ? lens2 + 'mm' : ''],
+  ];
+  MC_CHECKLIST_ITEMS.forEach(([key, label]) => {
+    pairs.push([label, variant[key] ? 'Yes' : 'No']);
+  });
+  return pairs;
+}
+
+function mcDrawLocationsPDF(doc, y, locations) {
+  locations.forEach(loc => {
+    y = pdfDrawSectionHeading(doc, y, loc.name || '(unnamed location)');
+    loc.variants.forEach(variant => {
+      y = pdfDrawSubHeading(doc, y, variant.variantId || mcVariantId(variant));
+      y = pdfDrawKeyValueTable(doc, y, mcVariantFieldPairs(variant));
+      y = pdfDrawCardList(doc, y, variant.cards);
+      y += 4;
+    });
+  });
+  return y;
+}
+
+function mcBuildReportPDF(title, locations) {
+  const doc = pdfNewDoc();
+  let y = pdfDrawHeader(doc, title);
+  y = pdfDrawKeyValueBlock(doc, y, 'Project', [['Project Name', mcState.projectName]]);
+  y = mcDrawLocationsPDF(doc, y, locations);
+  return doc;
+}
+
+function mcGenerateReportFor(locations, title, filenameBase) {
+  try {
+    const doc = mcBuildReportPDF(title, locations);
+    offerDownload(filenameBase + '.pdf', doc.output('blob'));
+  } catch (e) {
+    spToast('PDF generation failed.');
+  }
+}
+
+function mcGenerateFullReport() {
+  const clonedLocations = mcState.locations.map(l => ({ name: l.name, variants: l.variants.slice() }));
+  const d = mcState.draft;
+  if (d.location.trim() || d.variantName.trim()) {
+    const draftVariant = Object.assign({}, d, {
+      variantId: mcVariantId(d),
+      cards: (d.cards || []).slice(),
+    });
+    let loc = clonedLocations.find(l => l.name === d.location.trim());
+    if (!loc) {
+      loc = { name: d.location.trim(), variants: [] };
+      clonedLocations.push(loc);
+    }
+    loc.variants.push(draftVariant);
+  }
+  if (!clonedLocations.length) {
+    spToast('Nothing captured yet.');
+    return;
+  }
+  const fname = spFormatDateCompact(null) + '_' + spSanitizeName(mcState.projectName) + '_MultiCamReport';
+  mcGenerateReportFor(clonedLocations, 'Multi-Cam GS Report — ' + (mcState.projectName || 'Untitled Project'), fname);
+}
+
+/* ============ end Multi-Cam GS module ============ */
+
 function renderContent() {
   const content = document.getElementById('content');
   content.innerHTML = '';
@@ -2435,6 +2794,9 @@ function renderContent() {
   }
   if (tab.id === 'single') {
     renderSingleCamSection(content);
+  }
+  if (tab.id === 'multi') {
+    renderMultiCamSection(content);
   }
 }
 
@@ -2496,6 +2858,13 @@ document.getElementById('confirm-yes').addEventListener('click', () => {
     cardCounterTimestamp: null,
   };
   scSave();
+  mcState = {
+    projectName: '',
+    locations: [],
+    draft: mcBlankVariant(),
+    cardCounter: 1,
+  };
+  mcSave();
   const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
   try { localStorage.setItem(LAST_SHOOT_KEY, dateStr); } catch (e) {}
   loadLastShoot();
